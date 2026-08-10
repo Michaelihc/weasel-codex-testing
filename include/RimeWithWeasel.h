@@ -117,7 +117,6 @@ class RimeWithWeaselHandler : public weasel::RequestHandler {
   static std::mutex m_notifier_mutex;
   SessionStatusMap m_session_status_map;
   bool m_current_dark_mode;
-  bool m_global_ascii_mode;
   int m_show_notifications_time;
   DWORD m_pid;
 };

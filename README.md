@@ -1,4 +1,4 @@
-﻿【小狼毫】輸入法
+【小狼毫】輸入法
 ================
 
 基於 中州韻輸入法引擎／Rime Input Method Engine 等開源技術
@@ -35,6 +35,8 @@
 選取輸入法指示器菜單裏的【中】字樣圖標，開始用小狼毫寫字。
 
 可通過快捷鍵 <kbd>Ctrl+`</kbd> 或 <kbd>F4</kbd> 呼出方案選單、切換輸入方式。
+
+小狼毫只提供中文輸入。英文輸入請切換到 Windows 英文鍵盤；`ascii_mode`、`global_ascii`、`app_options` 中的 `ascii_mode`／`vim_mode`，以及舊的 ASCII 切換入口不再切換到 Rime 內部英文直通狀態。
 
 定製輸入法
 ----------

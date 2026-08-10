@@ -8,6 +8,10 @@ static weasel::KeyEvent prevKeyEvent;
 static BOOL prevfEaten = FALSE;
 static int keyCountToSimulate = 0;
 
+static bool IsVerticalNavigationKey(WPARAM wParam) {
+  return wParam == VK_UP || wParam == VK_DOWN;
+}
+
 void WeaselTSF::_ProcessKeyEvent(WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
   // when _IsKeyboardDisabled don't eat the key,
   // when keyboard closable and keyboard closed, don't eat the key
@@ -33,6 +37,12 @@ void WeaselTSF::_ProcessKeyEvent(WPARAM wParam, LPARAM lParam, BOOL* pfEaten) {
         ke.keycode = ibus::Down;
       else if (ke.keycode == ibus::Down)
         ke.keycode = ibus::Up;
+    }
+    if (ke.keycode == ibus::Shift_L || ke.keycode == ibus::Shift_R) {
+      *pfEaten = FALSE;
+      prevfEaten = *pfEaten;
+      prevKeyEvent = ke;
+      return;
     }
     if (!keyCountToSimulate)
       *pfEaten = (BOOL)m_client.ProcessKeyEvent(ke);
@@ -88,6 +98,14 @@ STDAPI WeaselTSF::OnTestKeyDown(ITfContext* pContext,
                                 LPARAM lParam,
                                 BOOL* pfEaten) {
   _fTestKeyUpPending = FALSE;
+  // Never let a stale TSF test-key state swallow page navigation.  While a
+  // Rime menu is open, status.composing is true and the keys still go to the
+  // selector below.
+  if (!_status.composing && IsVerticalNavigationKey(wParam)) {
+    _fTestKeyDownPending = FALSE;
+    *pfEaten = FALSE;
+    return S_OK;
+  }
   if (_fTestKeyDownPending) {
     *pfEaten = TRUE;
     return S_OK;
@@ -104,6 +122,11 @@ STDAPI WeaselTSF::OnKeyDown(ITfContext* pContext,
                             LPARAM lParam,
                             BOOL* pfEaten) {
   _fTestKeyUpPending = FALSE;
+  if (!_status.composing && IsVerticalNavigationKey(wParam)) {
+    _fTestKeyDownPending = FALSE;
+    *pfEaten = FALSE;
+    return S_OK;
+  }
   if (_fTestKeyDownPending) {
     _fTestKeyDownPending = FALSE;
     *pfEaten = TRUE;
@@ -119,6 +142,11 @@ STDAPI WeaselTSF::OnTestKeyUp(ITfContext* pContext,
                               LPARAM lParam,
                               BOOL* pfEaten) {
   _fTestKeyDownPending = FALSE;
+  if (!_status.composing && IsVerticalNavigationKey(wParam)) {
+    _fTestKeyUpPending = FALSE;
+    *pfEaten = FALSE;
+    return S_OK;
+  }
   if (_fTestKeyUpPending) {
     *pfEaten = TRUE;
     return S_OK;
@@ -135,6 +163,11 @@ STDAPI WeaselTSF::OnKeyUp(ITfContext* pContext,
                           LPARAM lParam,
                           BOOL* pfEaten) {
   _fTestKeyDownPending = FALSE;
+  if (!_status.composing && IsVerticalNavigationKey(wParam)) {
+    _fTestKeyUpPending = FALSE;
+    *pfEaten = FALSE;
+    return S_OK;
+  }
   if (_fTestKeyUpPending) {
     _fTestKeyUpPending = FALSE;
     *pfEaten = TRUE;
@@ -193,7 +226,7 @@ BOOL WeaselTSF::_InitPreservedKey() {
 		_tfClientId,
 		GUID_IME_MODE_PRESERVED_KEY,
 		&preservedKeyImeMode, L"", 0);
-	
+
 	return SUCCEEDED(hr);
 #endif
 }

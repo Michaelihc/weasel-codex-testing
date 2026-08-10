@@ -1,4 +1,4 @@
-﻿// WeaselSetup.cpp : main source file for WeaselSetup.exe
+// WeaselSetup.cpp : main source file for WeaselSetup.exe
 //
 
 #include "stdafx.h"
@@ -169,7 +169,7 @@ static int Run(LPTSTR lpCmdLine) {
           L"/eu            - Enable automatic update check\n"
           L"/du            - Disable automatic update check\n"
           L"/toggleime     - Toggle IME on open/close(ctrl+space)\n"
-          L"/toggleascii   - Toggle ASCII on open/close(ctrl+space)\n"
+          L"/toggleascii   - Deprecated; use the Windows English keyboard\n"
           L"/testing       - Set update channel to testing\n"
           L"/release       - Set update channel to release\n"
           L"/userdir:<dir> - Set user directory\n",
@@ -216,7 +216,7 @@ static int Run(LPTSTR lpCmdLine) {
   }
   if (!wcscmp(L"/toggleascii", lpCmdLine)) {
     return SetRegKeyValue(HKEY_CURRENT_USER, L"Software\\Rime\\weasel",
-                          L"ToggleImeOnOpenClose", L"no", REG_SZ);
+                          L"ToggleImeOnOpenClose", L"yes", REG_SZ);
   }
   if (!wcscmp(L"/testing", lpCmdLine)) {
     return SetRegKeyValue(HKEY_CURRENT_USER, L"Software\\Rime\\weasel",

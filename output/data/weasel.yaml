@@ -3,20 +3,14 @@
 
 config_version: "0.22"
 
+# English input is provided by the Windows English keyboard, not Rime ascii_mode.
 app_options:
-  cmd.exe:
-    ascii_mode: true
-  conhost.exe:
-    ascii_mode: true
   firefox.exe:
     inline_preedit: true # workaround for #946
 
 show_notifications: true
 # how long a period notifications shows
 show_notifications_time: 1200
-# use global ascii status
-global_ascii: false
-
 style:
   antialias_mode: default
   ascii_tip_follow_cursor: false

@@ -1,4 +1,4 @@
-﻿#include "stdafx.h"
+#include "stdafx.h"
 #include <logging.h>
 #include <RimeWithWeasel.h>
 #include <StringAlgorithm.hpp>
@@ -24,6 +24,20 @@ typedef enum { COLOR_ABGR = 0, COLOR_ARGB, COLOR_RGBA } ColorFormat;
 using namespace weasel;
 
 static RimeApi* rime_api;
+
+static bool IsChineseOnlyBlockedOption(const std::string& opt) {
+  return opt == "ascii_mode" || opt == "vim_mode";
+}
+
+static bool IsChineseOnlyBlockedOption(const char* opt) {
+  return opt && IsChineseOnlyBlockedOption(std::string(opt));
+}
+
+static void EnsureChineseMode(RimeSessionId session_id) {
+  if (session_id && rime_api->get_option(session_id, "ascii_mode"))
+    rime_api->set_option(session_id, "ascii_mode", False);
+}
+
 WeaselSessionId _GenerateNewWeaselSessionId(SessionStatusMap sm, DWORD pid) {
   if (sm.empty())
     return (WeaselSessionId)(pid + 1);
@@ -39,7 +53,6 @@ RimeWithWeaselHandler::RimeWithWeaselHandler(UI* ui)
       m_active_session(0),
       m_disabled(true),
       m_current_dark_mode(false),
-      m_global_ascii_mode(false),
       m_show_notifications_time(1200),
       _UpdateUICallback(NULL) {
   m_ui->InServer() = true;
@@ -134,9 +147,6 @@ void RimeWithWeaselHandler::Initialize() {
       }
       m_base_style = m_ui->style();
     }
-    Bool global_ascii = false;
-    if (rime_api->config_get_bool(&config, "global_ascii", &global_ascii))
-      m_global_ascii_mode = !!global_ascii;
     if (!rime_api->config_get_int(&config, "show_notifications_time",
                                   &m_show_notifications_time))
       m_show_notifications_time = 1200;
@@ -171,15 +181,7 @@ DWORD RimeWithWeaselHandler::AddSession(LPWSTR buffer, EatLine eat) {
       return 0;
   }
   RimeSessionId session_id = (RimeSessionId)rime_api->create_session();
-  if (m_global_ascii_mode) {
-    for (const auto& pair : m_session_status_map) {
-      if (pair.first) {
-        rime_api->set_option(session_id, "ascii_mode",
-                             !!pair.second.status.is_ascii_mode);
-        break;
-      }
-    }
-  }
+  EnsureChineseMode(session_id);
 
   WeaselSessionId ipc_id =
       _GenerateNewWeaselSessionId(m_session_status_map, m_pid);
@@ -189,6 +191,7 @@ DWORD RimeWithWeaselHandler::AddSession(LPWSTR buffer, EatLine eat) {
   session_status.style = m_base_style;
   session_status.session_id = session_id;
   _ReadClientInfo(ipc_id, buffer);
+  EnsureChineseMode(session_id);
 
   RIME_STRUCT(RimeStatus, status);
   if (rime_api->get_status(session_id, &status)) {
@@ -269,22 +272,10 @@ BOOL RimeWithWeaselHandler::ProcessKeyEvent(KeyEvent keyEvent,
   if (m_disabled)
     return FALSE;
   RimeSessionId session_id = to_session_id(ipc_id);
+  EnsureChineseMode(session_id);
   Bool handled = rime_api->process_key(session_id, keyEvent.keycode,
                                        expand_ibus_modifier(keyEvent.mask));
-  // vim_mode when keydown only
-  if (!handled && !(keyEvent.mask & ibus::Modifier::RELEASE_MASK)) {
-    bool isVimBackInCommandMode =
-        (keyEvent.keycode == ibus::Keycode::Escape) ||
-        ((keyEvent.mask & (1 << 2)) &&
-         (keyEvent.keycode == ibus::Keycode::XK_c ||
-          keyEvent.keycode == ibus::Keycode::XK_C ||
-          keyEvent.keycode == ibus::Keycode::XK_bracketleft));
-    if (isVimBackInCommandMode &&
-        rime_api->get_option(session_id, "vim_mode") &&
-        !rime_api->get_option(session_id, "ascii_mode")) {
-      rime_api->set_option(session_id, "ascii_mode", True);
-    }
-  }
+  EnsureChineseMode(session_id);
   _Respond(ipc_id, eat);
   _UpdateUI(ipc_id);
   m_active_session = ipc_id;
@@ -390,6 +381,16 @@ void RimeWithWeaselHandler::OnNotify(void* context_object,
   if (!self || !message_type || !message_value)
     return;
   std::lock_guard<std::mutex> lock(m_notifier_mutex);
+  if (!strcmp(message_type, "option")) {
+    const char* option_name = message_value + (message_value[0] == '!');
+    if (IsChineseOnlyBlockedOption(option_name)) {
+      m_message_type.clear();
+      m_message_value.clear();
+      m_message_label.clear();
+      m_option_name.clear();
+      return;
+    }
+  }
   m_message_type = message_type;
   m_message_value = message_value;
   if (RIME_API_AVAILABLE(rime_api, get_state_label) &&
@@ -435,6 +436,8 @@ void RimeWithWeaselHandler::_ReadClientInfo(WeaselSessionId ipc_id,
     if (it != m_app_options.end()) {
       AppOptions& options(m_app_options[it->first]);
       for (const auto& pair : options) {
+        if (IsChineseOnlyBlockedOption(pair.first))
+          continue;
         DLOG(INFO) << "set app option: " << pair.first << " = " << pair.second;
         rime_api->set_option(session_id, pair.first.c_str(), Bool(pair.second));
       }
@@ -489,14 +492,16 @@ void RimeWithWeaselHandler::EndMaintenance() {
 void RimeWithWeaselHandler::SetOption(WeaselSessionId ipc_id,
                                       const std::string& opt,
                                       bool val) {
+  if (IsChineseOnlyBlockedOption(opt)) {
+    if (ipc_id)
+      EnsureChineseMode(to_session_id(ipc_id));
+    else if (m_active_session)
+      EnsureChineseMode(to_session_id(m_active_session));
+    return;
+  }
   // from no-session client, not actual typing session
   if (!ipc_id) {
-    if (m_global_ascii_mode && opt == "ascii_mode") {
-      for (auto& pair : m_session_status_map)
-        rime_api->set_option(to_session_id(pair.first), "ascii_mode", val);
-    } else {
-      rime_api->set_option(to_session_id(m_active_session), opt.c_str(), val);
-    }
+    rime_api->set_option(to_session_id(m_active_session), opt.c_str(), val);
   } else {
     rime_api->set_option(to_session_id(ipc_id), opt.c_str(), val);
   }
@@ -754,11 +759,12 @@ bool RimeWithWeaselHandler::_Respond(WeaselSessionId ipc_id, EatLine eat) {
   bool is_composing = false;
   RIME_STRUCT(RimeStatus, status);
   static const std::wstring Bool_wstring[] = {L"0", L"1"};
+  EnsureChineseMode(session_id);
   if (rime_api->get_status(session_id, &status)) {
     is_composing = !!status.is_composing;
     actions.push_back("status");
     body.append(L"status.ascii_mode=")
-        .append(Bool_wstring[!!status.is_ascii_mode])
+        .append(Bool_wstring[0])
         .append(L"\n")
         .append(L"status.composing=")
         .append(Bool_wstring[!!status.is_composing])
@@ -772,14 +778,7 @@ bool RimeWithWeaselHandler::_Respond(WeaselSessionId ipc_id, EatLine eat) {
         .append(L"status.schema_id=")
         .append(status.schema_id ? u8tow(status.schema_id) : std::wstring())
         .append(L"\n");
-    if (m_global_ascii_mode &&
-        (session_status.status.is_ascii_mode != status.is_ascii_mode)) {
-      for (auto& pair : m_session_status_map) {
-        if (pair.first != ipc_id)
-          rime_api->set_option(to_session_id(pair.first), "ascii_mode",
-                               !!status.is_ascii_mode);
-      }
-    }
+    status.is_ascii_mode = False;
     session_status.status = status;
     rime_api->free_status(&status);
   }
@@ -1426,6 +1425,8 @@ static void _LoadAppOptions(RimeConfig* config,
             config, app_path, [&](const char* opt_key, const char* opt_path) {
               Bool value = False;
               if (rime_api->config_get_bool(config, opt_path, &value)) {
+                if (IsChineseOnlyBlockedOption(opt_key))
+                  return;
                 options[opt_key] = !!value;
               }
             });
@@ -1438,13 +1439,14 @@ void RimeWithWeaselHandler::_GetStatus(Status& stat,
   SessionStatus& session_status = get_session_status(ipc_id);
   RimeSessionId session_id = session_status.session_id;
   RIME_STRUCT(RimeStatus, status);
+  EnsureChineseMode(session_id);
   if (rime_api->get_status(session_id, &status)) {
     std::string schema_id = "";
     if (status.schema_id)
       schema_id = status.schema_id;
     stat.schema_name = u8tow(status.schema_name);
     stat.schema_id = u8tow(status.schema_id);
-    stat.ascii_mode = !!status.is_ascii_mode;
+    stat.ascii_mode = false;
     stat.composing = !!status.is_composing;
     stat.disabled = !!status.is_disabled;
     stat.full_shape = !!status.is_full_shape;

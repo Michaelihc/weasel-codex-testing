@@ -1,3 +1,10 @@
+<a name="unreleased"></a>
+## Unreleased
+
+### 主要更新
+* 小狼毫只提供中文輸入；英文輸入請切換到 Windows 英文鍵盤，不再使用 Rime 內部英文直通狀態。
+* `ascii_mode`、`global_ascii`、`app_options` 中的 `ascii_mode`／`vim_mode`，以及舊的 ASCII 切換入口保留爲兼容空操作。
+
 <a name="0.17.4"></a>
 ## [0.17.4](https://github.com/rime/weasel/compare/0.17.3...0.17.4)(2025-06-04)
 

@@ -243,27 +243,15 @@ void WeaselTSF::_UninitCompartment() {
 
 HRESULT WeaselTSF::_HandleCompartment(REFGUID guidCompartment) {
   if (IsEqualGUID(guidCompartment, GUID_COMPARTMENT_KEYBOARD_OPENCLOSE)) {
-    if (_isToOpenClose) {
-      BOOL isOpen = _IsKeyboardOpen();
-      // clear composition when close keyboard
-      if (!isOpen && _pEditSessionContext) {
-        m_client.ClearComposition();
-        _EndComposition(_pEditSessionContext, true);
-      }
-      _EnableLanguageBar(isOpen);
-      _UpdateLanguageBar(_status);
-    } else {
-      _status.ascii_mode = !_status.ascii_mode;
-      _SetKeyboardOpen(true);
-      if (_pLangBarButton && _pLangBarButton->IsLangBarDisabled())
-        _EnableLanguageBar(true);
-      _HandleLangBarMenuSelect(_status.ascii_mode
-                                   ? ID_WEASELTRAY_ENABLE_ASCII
-                                   : ID_WEASELTRAY_DISABLE_ASCII);
-      if (_pEditSessionContext)
-        m_client.ClearComposition();
-      _UpdateLanguageBar(_status);
+    BOOL isOpen = _IsKeyboardOpen();
+    // English input belongs to the Windows English keyboard, not Rime ASCII mode.
+    if (!isOpen && _pEditSessionContext) {
+      m_client.ClearComposition();
+      _EndComposition(_pEditSessionContext, true);
     }
+    _status.ascii_mode = false;
+    _EnableLanguageBar(isOpen);
+    _UpdateLanguageBar(_status);
   } else if (IsEqualGUID(guidCompartment,
                          GUID_COMPARTMENT_KEYBOARD_INPUTMODE_CONVERSION)) {
     BOOL isOpen = _IsKeyboardOpen();

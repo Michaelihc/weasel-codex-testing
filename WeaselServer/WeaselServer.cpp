@@ -1,4 +1,4 @@
-﻿// WeaselServer.cpp : main source file for WeaselServer.exe
+// WeaselServer.cpp : main source file for WeaselServer.exe
 //
 //	WTL MessageLoop 封装了消息循环. 实现了 getmessage/dispatchmessage....
 
@@ -73,13 +73,9 @@ int WINAPI _tWinMain(HINSTANCE hInstance,
   }
   if (!wcscmp(L"/ascii", lpstrCmdLine) || !wcscmp(L"/nascii", lpstrCmdLine)) {
     weasel::Client client;
-    bool ascii = !wcscmp(L"/ascii", lpstrCmdLine);
     if (client.Connect())  // try to connect to running server
     {
-      if (ascii)
-        client.TrayCommand(ID_WEASELTRAY_ENABLE_ASCII);
-      else
-        client.TrayCommand(ID_WEASELTRAY_DISABLE_ASCII);
+      client.TrayCommand(ID_WEASELTRAY_DISABLE_ASCII);
     }
     return 0;
   }
