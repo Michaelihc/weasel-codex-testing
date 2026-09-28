@@ -34,6 +34,10 @@ compile_commands.json
 env.bat
 weasel.props
 *.log
+__pycache__/
+*.pyc
+*.dmp
+/test-evidence/
 *.user
 *.suo
 *.sdf
